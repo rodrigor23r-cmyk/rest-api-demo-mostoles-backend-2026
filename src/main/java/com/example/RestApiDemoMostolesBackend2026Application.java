@@ -11,3 +11,8 @@ public class RestApiDemoMostolesBackend2026Application {
 	}
 
 }
+/**
+set -a; source .env; set +a     # una sola vez al abrir la terminal
+mvn test                         # ya funciona el resto de la sesión
+./mvnw spring-boot:run           # y esto también 
+ */
