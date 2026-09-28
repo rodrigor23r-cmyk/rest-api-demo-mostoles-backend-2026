@@ -21,6 +21,10 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder 
 public class Role {
+
+    // private static final long serialVersionUID = 1L; Podría ser útil si se implementa Serializable, 
+    // pero no es necesario en este caso, ya que no se va a serializar la clase Role. Por lo tanto, 
+    // no es necesario definir un serialVersionUID.
     
     @Id 
     @GeneratedValue (strategy = GenerationType.IDENTITY)    
