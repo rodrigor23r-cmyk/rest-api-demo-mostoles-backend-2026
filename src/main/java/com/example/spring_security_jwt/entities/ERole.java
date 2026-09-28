@@ -1,4 +1,4 @@
-package com.example.entities;
+package com.example.spring_security_jwt.entities;
 
 public enum ERole {
 
