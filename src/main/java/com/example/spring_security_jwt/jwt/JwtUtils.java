@@ -27,28 +27,22 @@ public class JwtUtils {
 
     @Value("${jwt.secret}")
     private String jwtSecret;
-    
+
     @Value("${jwt.expiration-ms}")
     private int jwtExpirationMs;
 
-public String generateJwtToken(Authentication authenticaion) {
-UserDetailsImpl userPrincipal = (UserDetailsImpl)
-authenticaion.getPrincipal();
+    public String generateJwtToken(Authentication authenticaion) {
 
+        UserDetailsImpl userPrincipal = (UserDetailsImpl) authenticaion.getPrincipal();
 
+        return Jwts.builder()
+                .subject(userPrincipal.getUsername())
+                .issuedAt(new Date())
+                .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
+                .signWith(key())
+                .compact();
 
-    return Jwts.builder()
-.subject(userPrincipal.getUsername())
-.issuedAt(new Date())
-.expiration(new Date((new Date()).getTime() + jwtExpirationMs))
-.signWith(key())
-.compact();
-// .setSubject(userPrincipal.getUsername())
-// .setIssuedAt(new Date())
-// .setExpiration(new Date((new Date()).getTime() +jwtExpirationMs))
-// .signWith(key(), SignatureAlgorithm.HS256)
-// .compact();
-}
+    }
 
     private Key key() {
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
@@ -57,10 +51,9 @@ authenticaion.getPrincipal();
     public String getUserNameFromJwtToken(String token) {
         return Jwts.parser().verifyWith((SecretKey) key()).build()
                 .parseSignedClaims(token).getPayload().getSubject();
-        // return Jwts.parserBuilder().setSigningKey(key()).build()
-        // .parseClaimsJws(token).getBody().getSubject();
     }
 
+    
     public boolean validateJwtToken(String authToken) {
 
         try {
