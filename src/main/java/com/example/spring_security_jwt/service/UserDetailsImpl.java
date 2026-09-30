@@ -13,11 +13,13 @@ import com.example.spring_security_jwt.entities.User;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import lombok.AllArgsConstructor;
+import lombok.Data;
 
 
 /**
  * UserDetailsImpl
  */
+@Data 
 @AllArgsConstructor
 public class UserDetailsImpl implements UserDetails {
 

@@ -51,8 +51,8 @@ public class WebSecurityConfig {
         return authProvider;
     }
     // ANTIGUO, CÓDIGO DEL PROFESOR:
-    //     DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-    //     authProvider.setUserDetailsService(userDetailsService);
+    // DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+    // authProvider.setUserDetailsService(userDetailsService);
 
     @Bean
     PasswordEncoder passwordEncoder() {
@@ -66,11 +66,13 @@ public class WebSecurityConfig {
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
         http.csrf(csrf -> csrf.disable())
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizeHandle))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/**").permitAll()
                         .anyRequest().authenticated());
+
         http.authenticationProvider(authenticationProvider());
 
         http.addFilterBefore(authenticationJwtTokenFilter(),
