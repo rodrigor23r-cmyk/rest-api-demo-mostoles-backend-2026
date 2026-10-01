@@ -1,6 +1,6 @@
 package com.example.spring_security_jwt.payload.response;
 
-import java.util.List;
+import java.util.Set;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,5 +18,5 @@ public class JwtResponse {
     private Long id;
     private String username;
     private String email;
-    private List<String> roles;
+    private Set<String> roles;
 }
