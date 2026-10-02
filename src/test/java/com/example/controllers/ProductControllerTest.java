@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.Sort;
@@ -31,6 +32,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.example.entities.Presentation;
 import com.example.entities.Product;
 import com.example.services.ProductService;
+import com.example.spring_security_jwt.payload.request.LoginRequest;
 import com.example.utilities.FileDownloadUtil;
 import com.example.utilities.FileUploadUtil;
 import com.example.utilities.FileUtil;
@@ -38,8 +40,8 @@ import com.example.utilities.FileUtil;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
-@WebMvcTest(ProductController.class)
-
+// @WebMvcTest(ProductController.class)
+@SpringBootTest 
 /**
  * La anotacion anterior es la recomendada para implementar test de Integracion,
  * a la capa de controladores que conlleva la realizacion de peticiones HTTP.
@@ -87,7 +89,23 @@ class ProductControllerTest {
 	
 	@BeforeEach
 	void setUp() {
-		
+
+		/**
+		 * Necesitamos obtener un token válido para poder realizar las peticiones a los end points de ProductController, ya que
+		 * estos end points están protegidos por Spring Security y requieren autenticación.
+		 */
+		LoginRequest loginRequest = LoginRequest.builder()
+				.username("admin")
+				.password("Temp2026$$")
+				.build();
+		/**
+		 *  Para convertir el objeto loginRequest a formato JSON, es decir, una cadena (String) en formato de JSON, lo cual hace el objectMapper que hemos inyectado como dependencia al principio de la clase bajo Test
+		 *  Esto es necesario para poder enviar el objeto loginRequest en el cuerpo de la petición HTTP, ya que el end point de autenticación espera recibir un objeto JSON con las credenciales del usuario (username y password) para poder generar un token JWT válido.
+		 *  Una vez que tengamos el token JWT válido, podremos utilizarlo en las cabeceras de las peticiones HTTP
+		 */
+			String jsonStringLoginRequest = objectMapper.writeValueAsString(loginRequest);
+
+
 		presentation1 = Presentation.builder()
 				.name("decenas")
 				.description("Por decenas")
