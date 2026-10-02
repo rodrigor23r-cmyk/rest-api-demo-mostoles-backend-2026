@@ -54,13 +54,19 @@ public class AuthController {
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signupRequest,
             BindingResult validationResults) {
-        // meter Result ================================
-        if (result.hasErrors()) {
-            Map<String, String> errors = result.getFieldErrors().stream()
+
+        // meter validationResults ================================
+
+        if (validationResults.hasErrors()) {
+
+            Map<String, String> errors = validationResults.getFieldErrors().stream()
                     .collect(Collectors.toMap(FieldError::getField, FieldError::getDefaultMessage, (a, b) -> a));
+                    
             return ResponseEntity.badRequest().body(new ValidationErrorResponse(errors, "Validation failed"));
+
         }
         //fin hasError==================
+
         if (userRepository.existsByUsername(signupRequest.getUsername())) {
             return ResponseEntity.badRequest()
                     .body(new MessageResponse("Error: Username is already taken"));
