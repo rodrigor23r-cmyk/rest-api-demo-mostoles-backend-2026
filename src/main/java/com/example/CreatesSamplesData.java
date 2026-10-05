@@ -1,10 +1,12 @@
 package com.example;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.example.entities.Presentation;
 import com.example.entities.Product;
@@ -12,14 +14,18 @@ import com.example.services.PresentationService;
 import com.example.services.ProductService;
 import com.example.spring_security_jwt.entities.ERole;
 import com.example.spring_security_jwt.entities.Role;
+import com.example.spring_security_jwt.entities.User;
 import com.example.spring_security_jwt.repository.RoleRepository;
+import com.example.spring_security_jwt.repository.UserRepository;
 
 @Configuration
 public class CreatesSamplesData {
 
+    @SuppressWarnings ("nullable")
     @Bean
     CommandLineRunner samplesData(ProductService productService,
-        PresentationService presentationService, RoleRepository roleRepository) {
+        PresentationService presentationService, RoleRepository roleRepository
+        , UserRepository userRepository, PasswordEncoder encoder) {
             
             
         return args -> {
@@ -122,12 +128,28 @@ public class CreatesSamplesData {
                 .build());
 
             // Crearemos los roles de usuario y administrador
-            roleRepository.save(Role.builder()
+            Role userRole = roleRepository.save(Role.builder()
                 .name(ERole.ROLE_USER)
                 .build()); 
 
-            roleRepository.save(Role.builder()
+            Role adminRole = roleRepository.save(Role.builder()
                 .name(ERole.ROLE_ADMIN)
+                .build());
+
+
+            // Crearemos un usuario administrador y un usuario normal
+            User adminUser = userRepository.save(User.builder()
+                .username("admin")
+                .email("admin@example.com")
+                .password(encoder.encode("Temp2026$$"))
+                .roles(Set.of(adminRole))
+                .build());
+
+            User normalUser = userRepository.save(User.builder()
+                .username("user")
+                .email("user@example.com")
+                .password(encoder.encode("Temp2026$$"))
+                .roles(Set.of(userRole))
                 .build());
         };
     
