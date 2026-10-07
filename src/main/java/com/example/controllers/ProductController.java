@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.hateoas.Link;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -40,6 +41,8 @@ import com.example.utilities.FileUtil;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 
 /**
  * La anotacion @RestController es para que todos los metodos que van a ser
@@ -146,10 +149,20 @@ public class ProductController {
 
 		try {
 			Product product = productService.findById(product_id);
+
+			// vamos a agregar enlaces hipermediales (HATEOAS) al producto 
+			Link selfLink = linkTo(methodOn(ProductController.class).findProductById(product_id)).withSelfRel();
+			// Creamos un enlace hipermedial (HATEOAS) que apunta a todos los productos
+			Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(3, 3)).withRel("all products");
+
+
 			if (product != null) {
 				String successMessage = "El producto con id " + product_id + " ha sido encontrado";
 				responseAsMap.put("mensaje todo OK: ", successMessage);
 				responseAsMap.put("producto encontrado: ", product);
+				// Agregar los enlaces hipermediales al mapa de respuesta
+				responseAsMap.put("self link: ", selfLink);
+				responseAsMap.put("all products link: ", allProductsLink);
 				responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
 			} else {
 				String failureMessage = "No ha sido encontrado ningun producto con id: " + product_id;
