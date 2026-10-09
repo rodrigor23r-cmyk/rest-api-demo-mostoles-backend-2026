@@ -6,6 +6,9 @@ import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 
@@ -23,6 +26,9 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
@@ -200,6 +206,37 @@ class ProductControllerTest {
 	}
 
 	@Test
+	@DisplayName("Controller Test que recupera los productos paginados")
+	void testFindAllPaginado() throws Exception {
+
+		// given
+		Pageable pageableDeLaPrueba = PageRequest.of(0, 1, Sort.by("name"));
+
+		given(productService.findAll(pageableDeLaPrueba))
+			.willReturn(new PageImpl<>(List.of(product1), pageableDeLaPrueba, products.size()));
+
+		// when
+		ResultActions response = mockMvc
+				.perform(get("/products")
+				.param("page", "0")
+				.param("size", "1")
+				.accept(MediaType.APPLICATION_JSON)
+				.header("Authorization", this.token));
+
+		// then: la paginacion (first/self/next/last y el bloque "page") la
+		// calcula el PagedResourcesAssembler de Spring HATEOAS; aqui solo
+		// comprobamos que el contenido y la metadata de la pagina son correctos
+		response.andExpect(status().isOk()).andDo(print())
+				.andExpect(jsonPath("$._embedded.productDTOList.size()", is(1)))
+				.andExpect(jsonPath("$._embedded.productDTOList[0].name", is(product1.getName())))
+				.andExpect(jsonPath("$.page.size", is(1)))
+				.andExpect(jsonPath("$.page.totalElements", is(products.size())))
+				.andExpect(jsonPath("$.page.totalPages", is(2)))
+				.andExpect(jsonPath("$._links.next.href", notNullValue()))
+				.andExpect(jsonPath("$._links.create.href", notNullValue()));
+	}
+
+	@Test
 	@DisplayName("Controller Test para Persistir un Producto")
 	void testSaveProduct()  {
 		
@@ -271,6 +308,57 @@ class ProductControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$['producto encontrado: '].name",
 						is(product1.getName())));
+	}
+
+	@Test
+	@DisplayName("Controller Test: un usuario ROLE_USER no ve los enlaces de mutación (update/delete)")
+	void testUsuarioNormalNoVeEnlacesDeMutacion() throws Exception {
+
+		// given
+
+		int productId = 1;
+
+		given(productService.findById(productId))
+			.willReturn(product1);
+
+		// Nos logueamos como "user" (ROLE_USER, visto en CreatesSamplesData),
+		// en vez de como "admin" (this.token, fijado en setUp())
+		LoginRequest loginRequestUsuarioNormal = LoginRequest.builder()
+				.username("user")
+				.password("Temp2026$$")
+				.build();
+
+		String jsonLoginUsuarioNormal = objectMapper.writeValueAsString(loginRequestUsuarioNormal);
+
+		MvcResult signinResult = this.mockMvc.perform(post("/api/auth/signin")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(jsonLoginUsuarioNormal))
+				.andReturn();
+
+		JSONObject signinJson = new JSONObject(signinResult.getResponse().getContentAsString());
+		String tokenUsuarioNormal = "Bearer " + signinJson.getString("token");
+
+		// when
+		ResultActions response = mockMvc.perform(get("/products/{id}", productId)
+				.header("Authorization", tokenUsuarioNormal));
+
+		// then: self y all products siguen presentes (GET lo autoriza tambien
+		// ROLE_USER), pero update y delete desaparecen (su @PreAuthorize solo
+		// autoriza ROLE_ADMIN)
+		// NOTA: en este endpoint la respuesta completa es un Map<String,Object>
+		// (no un RepresentationModel en el nivel superior), asi que Spring no
+		// elige aqui el conversor HAL: el ProductDTO anidado serializa sus
+		// enlaces en el formato "plano" de spring-hateoas, un array
+		// "links": [{"rel":..., "href":...}, ...], no como "_links" (eso solo
+		// pasa cuando el tipo de retorno del propio endpoint es un
+		// RepresentationModel, como en dameProductos). Por eso se comprueba
+		// la presencia/ausencia de cada rel dentro de ese array.
+		response.andDo(print())
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$['producto encontrado: '].links[*].rel", hasItem("self")))
+				.andExpect(jsonPath("$['producto encontrado: '].links[*].rel", hasItem("all products")))
+				.andExpect(jsonPath("$['producto encontrado: '].links[*].rel", not(hasItem("update"))))
+				.andExpect(jsonPath("$['producto encontrado: '].links[*].rel", not(hasItem("delete"))));
 	}
 
 	@Test

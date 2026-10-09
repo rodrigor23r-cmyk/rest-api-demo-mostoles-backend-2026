@@ -110,8 +110,17 @@ public class ProductController {
 			@RequestParam(name = "page", required = false) Integer page,
 			@RequestParam(name = "size", required = false) Integer size) {
 
-		List<Product> products = null;
 		Sort sort = Sort.by("name");
+
+		/**
+		 * Toda la construccion de enlaces (de cada producto, de la coleccion, de
+		 * paginacion y de mutacion) vive ahora en ProductModelAssembler. Aqui ya
+		 * no queda ningun linkTo(methodOn(...)) repetido.
+		 *
+		 * PagedModel<ProductDTO> es, en si mismo, un CollectionModel<ProductDTO>,
+		 * por eso ambas ramas pueden devolverse con el mismo tipo de retorno.
+		 */
+		CollectionModel<ProductDTO> collectionModel;
 
 		// Comprobar si en la peticion (request) me han suministrado los parametros page
 		// y size
@@ -119,22 +128,18 @@ public class ProductController {
 
 			Pageable pageable = PageRequest.of(page, size, sort);
 
-			// Implica devolver los productos paginados, es decir, una pagina de Product
+			// Implica devolver los productos paginados, es decir, una pagina de Product,
+			// con sus enlaces de navegacion (first, prev, self, next, last) calculados
+			// por el PagedResourcesAssembler de Spring HATEOAS
 			Page<Product> productPage = productService.findAll(pageable);
-			products = productPage.getContent();
+			collectionModel = productModelAssembler.toPagedModel(productPage);
 
 		} else {
 
-			// Devolver los productos ordenados, por nombre (name), por ejemplo
-			products = productService.findAll(sort);
+			// Devolver los productos ordenados, por nombre (name), por ejemplo, sin paginar
+			List<Product> products = productService.findAll(sort);
+			collectionModel = productModelAssembler.toCollectionModel(products);
 		}
-
-		/**
-		 * Toda la construccion de enlaces (el de cada producto y el de la propia
-		 * coleccion) vive ahora en ProductModelAssembler. Aqui ya no queda ningun
-		 * linkTo(methodOn(...)) repetido.
-		 */
-		CollectionModel<ProductDTO> collectionModel = productModelAssembler.toCollectionModel(products, page, size);
 
 		return new ResponseEntity<>(collectionModel, HttpStatus.OK);
 	}
