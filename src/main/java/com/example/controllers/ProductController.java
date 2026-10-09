@@ -13,8 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.hateoas.CollectionModel;
-import org.springframework.hateoas.EntityModel;
-import org.springframework.hateoas.Link;
+import org.springframework.hateoas.IanaLinkRelations;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -33,7 +32,11 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.example.assemblers.ProductModelAssembler;
+import com.example.dto.ProductDTO;
+import com.example.dto.ProductRequestDTO;
 import com.example.entities.Product;
+import com.example.mappers.ProductMapper;
 import com.example.models.FileUploadResponse;
 import com.example.services.ProductService;
 import com.example.utilities.FileDownloadUtil;
@@ -43,8 +46,6 @@ import com.example.utilities.FileUtil;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 
 /**
  * La anotacion @RestController es para que todos los metodos que van a ser
@@ -74,6 +75,8 @@ public class ProductController {
 	private final FileUploadUtil fileUploadUtil;
 	private final FileDownloadUtil fileDownloadUtil;
 	private final FileUtil fileUtil;
+	private final ProductMapper productMapper;
+	private final ProductModelAssembler productModelAssembler;
 
 	/**
 	 * 
@@ -103,7 +106,7 @@ public class ProductController {
 	 */
 	@GetMapping
 	@PreAuthorize ("hasRole('ADMIN') or hasRole('USER')")
-	public ResponseEntity<CollectionModel<EntityModel<Product>>> dameProductos(
+	public ResponseEntity<CollectionModel<ProductDTO>> dameProductos(
 			@RequestParam(name = "page", required = false) Integer page,
 			@RequestParam(name = "size", required = false) Integer size) {
 
@@ -127,29 +130,11 @@ public class ProductController {
 		}
 
 		/**
-		 * Implementacion BASICA de HATEOAS (codigo repetitivo, sin
-		 * RepresentationModelAssemblerSupport): por cada Product hay que construir a
-		 * mano su EntityModel con sus enlaces (self y all products)
+		 * Toda la construccion de enlaces (el de cada producto y el de la propia
+		 * coleccion) vive ahora en ProductModelAssembler. Aqui ya no queda ningun
+		 * linkTo(methodOn(...)) repetido.
 		 */
-		List<EntityModel<Product>> productsConEnlaces = new ArrayList<>();
-
-		for (Product product : products) {
-
-			Link selfLink = linkTo(methodOn(ProductController.class).findProductById(product.getId()))
-					.withSelfRel();
-			Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(page, size))
-					.withRel("all products");
-
-			EntityModel<Product> productModel = EntityModel.of(product, selfLink, allProductsLink);
-			productsConEnlaces.add(productModel);
-		}
-
-		// Enlace hipermedial que apunta a la propia coleccion (self de la coleccion)
-		Link collectionSelfLink = linkTo(methodOn(ProductController.class).dameProductos(page, size))
-				.withSelfRel();
-
-		CollectionModel<EntityModel<Product>> collectionModel = CollectionModel.of(productsConEnlaces,
-				collectionSelfLink);
+		CollectionModel<ProductDTO> collectionModel = productModelAssembler.toCollectionModel(products, page, size);
 
 		return new ResponseEntity<>(collectionModel, HttpStatus.OK);
 	}
@@ -176,19 +161,13 @@ public class ProductController {
 
 			if (product != null) {
 
-				// vamos a agregar enlaces hipermediales (HATEOAS) al producto, envolviendolo
-				// en un EntityModel (implementacion basica, repetitiva, sin Assembler)
-				Link selfLink = linkTo(methodOn(ProductController.class).findProductById(product_id))
-						.withSelfRel();
-				// Creamos un enlace hipermedial (HATEOAS) que apunta a todos los productos
-				Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(null, null))
-						.withRel("all products");
-
-				EntityModel<Product> productModel = EntityModel.of(product, selfLink, allProductsLink);
+				// El assembler convierte la entidad a DTO y le añade sus enlaces
+				// (self y all products) en un solo paso
+				ProductDTO productDTO = productModelAssembler.toModel(product);
 
 				String successMessage = "El producto con id " + product_id + " ha sido encontrado";
 				responseAsMap.put("mensaje todo OK: ", successMessage);
-				responseAsMap.put("producto encontrado: ", productModel);
+				responseAsMap.put("producto encontrado: ", productDTO);
 				responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
 			} else {
 				String failureMessage = "No ha sido encontrado ningun producto con id: " + product_id;
@@ -224,7 +203,8 @@ public class ProductController {
 	@PostMapping(consumes = "multipart/form-data")
 	@Transactional
 	@PreAuthorize ("hasRole('ADMIN')")
-	public ResponseEntity<Map<String, Object>> saveProduct(@Valid @RequestPart Product product, BindingResult result,
+	public ResponseEntity<Map<String, Object>> saveProduct(
+			@Valid @RequestPart(name = "product") ProductRequestDTO productRequestDTO, BindingResult result,
 			@RequestPart(name = "file", required = false) MultipartFile imagenDelProducto) throws IOException {
 
 		List<String> mensajesDeError = new ArrayList<>();
@@ -240,12 +220,16 @@ public class ProductController {
 			objectErrors.stream().forEach(objectError -> mensajesDeError.add(objectError.getDefaultMessage()));
 
 			responseAsMap.put("El producto tiene los siguientes errores: ", mensajesDeError);
-			responseAsMap.put("Producto mal formado: ", product);
+			responseAsMap.put("Producto mal formado: ", productRequestDTO);
 
 			responseEntity = new ResponseEntity<>(responseAsMap, HttpStatus.BAD_REQUEST);
 
 			return responseEntity;
 		}
+
+		// Convertimos el DTO de entrada (capa de presentacion) en la entidad que
+		// hay que persistir (capa de persistencia)
+		Product product = productMapper.toEntity(productRequestDTO);
 
 		// Persistimos el producto porque si hemos llegado a este punto es que esta bien
 		// formado
@@ -295,18 +279,14 @@ public class ProductController {
 		try {
 			Product productoPersistido = productService.save(product);
 
-			// Implementacion basica de HATEOAS: envolvemos el producto persistido en un
-			// EntityModel con sus enlaces (self y all products)
-			Link selfLink = linkTo(methodOn(ProductController.class).findProductById(productoPersistido.getId()))
-					.withSelfRel();
-			Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(null, null))
-					.withRel("all products");
-
-			EntityModel<Product> productModel = EntityModel.of(productoPersistido, selfLink, allProductsLink);
+			// El assembler convierte la entidad a DTO y le añade sus enlaces
+			// (self y all products) en un solo paso
+			ProductDTO productDTO = productModelAssembler.toModel(productoPersistido);
 
 			responseAsMap.put("mensaje: ", "Producto persistido exitosamente!!!");
-			responseAsMap.put("product", productModel);
-			responseEntity = ResponseEntity.created(selfLink.toUri()).body(responseAsMap);
+			responseAsMap.put("product", productDTO);
+			responseEntity = ResponseEntity.created(productDTO.getRequiredLink(IanaLinkRelations.SELF).toUri())
+					.body(responseAsMap);
 		} catch (DataAccessException e) {
 			responseAsMap.put("Error Grave", "No ha podido ser guardado el producto y la causa mas probable es: "
 					+ e.getMostSpecificCause().getMessage());
@@ -422,7 +402,8 @@ public class ProductController {
 	@PutMapping(value = "/{id}", consumes = "multipart/form-data")
 	@Transactional
 	@PreAuthorize ("hasRole('ADMIN')")
-	public ResponseEntity<Map<String, Object>> updateProduct(@Valid @RequestPart Product product, BindingResult result,
+	public ResponseEntity<Map<String, Object>> updateProduct(
+			@Valid @RequestPart(name = "product") ProductRequestDTO productRequestDTO, BindingResult result,
 			@RequestPart(name = "file", required = false) MultipartFile imagenDelProducto,
 			@PathVariable(name = "id", required = true) int product_id) throws IOException {
 
@@ -440,11 +421,16 @@ public class ProductController {
 			});
 
 			responseAsMap.put("respuesta de error: ", mensajesDeError);
-			responseAsMap.put("producto mal formado: ", product);
+			responseAsMap.put("producto mal formado: ", productRequestDTO);
 			responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.BAD_REQUEST);
 
 			return responseEntity;
 		}
+
+		// Convertimos el DTO de entrada (capa de presentacion) en la entidad que
+		// hay que persistir (capa de persistencia)
+		Product product = productMapper.toEntity(productRequestDTO);
+
 		/**
 		 * Persisto (guardo) el producto porque está bien formado compruebo si hay
 		 * imagen para guardarla y en tal caso debo eliminar la imagen del producto
@@ -495,17 +481,12 @@ public class ProductController {
 			product.setId(product_id);
 			Product productoAGuardar = productService.save(product);
 
-			// Implementacion basica de HATEOAS: envolvemos el producto actualizado en un
-			// EntityModel con sus enlaces (self y all products)
-			Link selfLink = linkTo(methodOn(ProductController.class).findProductById(productoAGuardar.getId()))
-					.withSelfRel();
-			Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(null, null))
-					.withRel("all products");
-
-			EntityModel<Product> productModel = EntityModel.of(productoAGuardar, selfLink, allProductsLink);
+			// El assembler convierte la entidad a DTO y le añade sus enlaces
+			// (self y all products) en un solo paso
+			ProductDTO productDTO = productModelAssembler.toModel(productoAGuardar);
 
 			responseAsMap.put("mensaje: ", "Producto actualizado exitósamente!");
-			responseAsMap.put("producto actualizado: ", productModel);
+			responseAsMap.put("producto actualizado: ", productDTO);
 			responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
 
 		} catch (DataAccessException e) {
@@ -551,14 +532,11 @@ public class ProductController {
             productService.delete(productService.findById(id));
             String successMessage = "El producto con id " + id + ", ha sido eliminado";
 
-            // Implementacion basica de HATEOAS: como el producto ya no existe, no se
-            // puede envolver en un EntityModel propio, pero si se puede indicar al
-            // cliente a donde dirigirse a continuacion (coleccion de productos)
-            Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(null, null))
-                    .withRel("all products");
-
+            // Como el producto ya no existe, no se puede convertir a ProductDTO, pero
+            // si se puede indicar al cliente a donde dirigirse a continuacion
+            // (coleccion de productos), reutilizando el mismo assembler
             responseAsMap.put("mensaje", successMessage);
-            responseAsMap.put("enlace a todos los productos", allProductsLink);
+            responseAsMap.put("enlace a todos los productos", productModelAssembler.allProductsLink());
             responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
         } catch (DataAccessException e) {
             String errorMessage = "No ha podido ser eliminado el producto cuyo id es: " + id

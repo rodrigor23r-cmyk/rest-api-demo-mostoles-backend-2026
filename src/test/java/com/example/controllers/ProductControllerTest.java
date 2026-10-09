@@ -31,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.example.dto.ProductRequestDTO;
 import com.example.entities.Presentation;
 import com.example.entities.Product;
 import com.example.services.ProductService;
@@ -188,8 +189,12 @@ class ProductControllerTest {
 		// (el nombre "productList" lo asigna Spring HATEOAS por defecto al no
 		// tener la entidad Product una anotacion @Relation), en vez de bajo la
 		// clave plana "products" que se usaba antes.
+		// NOTA: desde que el endpoint devuelve DTOs (ProductDTO) en vez de la
+		// entidad Product, el nombre que Spring HATEOAS asigna a la coleccion
+		// embebida pasa de "productList" a "productDTOList", porque lo deriva
+		// del nombre de la clase que envuelve cada EntityModel.
 		response.andExpect(status().isOk()).andDo(print())
-				.andExpect(jsonPath("$._embedded.productList.size()",
+				.andExpect(jsonPath("$._embedded.productDTOList.size()",
 						is(products.size())));
 
 	}
@@ -208,14 +213,24 @@ class ProductControllerTest {
 		 * en formato de JSON, lo cual hace el objectMapper que hemos inyectado como 
 		 * dependencia al principio de la clase bajo Test */
 		
-		String jsonStringProduct = objectMapper.writeValueAsString(product1);
-		
+		// Desde que saveProduct recibe ProductRequestDTO en vez de la entidad
+		// Product, hay que enviar ese DTO (con presentationId en vez del objeto
+		// Presentation completo) como JSON de la peticion
+		ProductRequestDTO productRequestDTO = new ProductRequestDTO(
+				product1.getName(),
+				product1.getDescription(),
+				product1.getStock(),
+				product1.getPrice(),
+				presentation1.getId());
+
+		String jsonStringProduct = objectMapper.writeValueAsString(productRequestDTO);
+
 		MockMultipartFile bytesArrayProduct = new MockMultipartFile(
-				    "product", 
-				    null, 
-				    "application/json", 
+				    "product",
+				    null,
+				    "application/json",
 				    jsonStringProduct.getBytes());
-		
+
 		try {
 				mockMvc
 				    .perform(multipart("/products")
@@ -284,9 +299,20 @@ class ProductControllerTest {
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         //when
-        String jsonStringProduct = objectMapper.writeValueAsString(product1);
 
-        MockMultipartFile bytesArrayProduct = new MockMultipartFile("product", 
+        // Desde que updateProduct recibe ProductRequestDTO en vez de la entidad
+        // Product, hay que enviar ese DTO (con presentationId en vez del objeto
+        // Presentation completo) como JSON de la peticion
+        ProductRequestDTO productRequestDTO = new ProductRequestDTO(
+                product1.getName(),
+                product1.getDescription(),
+                product1.getStock(),
+                product1.getPrice(),
+                presentation1.getId());
+
+        String jsonStringProduct = objectMapper.writeValueAsString(productRequestDTO);
+
+        MockMultipartFile bytesArrayProduct = new MockMultipartFile("product",
                             null,
                             "application/json",
                             jsonStringProduct.getBytes());
