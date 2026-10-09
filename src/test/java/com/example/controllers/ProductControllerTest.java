@@ -183,8 +183,13 @@ class ProductControllerTest {
 				.header("Authorization", this.token));	
 		// then
 
+		// NOTA: desde que se implemento HATEOAS, la coleccion se serializa en
+		// formato HAL por defecto, es decir, dentro de "_embedded.productList"
+		// (el nombre "productList" lo asigna Spring HATEOAS por defecto al no
+		// tener la entidad Product una anotacion @Relation), en vez de bajo la
+		// clave plana "products" que se usaba antes.
 		response.andExpect(status().isOk()).andDo(print())
-				.andExpect(jsonPath("$.products.size()",
+				.andExpect(jsonPath("$._embedded.productList.size()",
 						is(products.size())));
 
 	}

@@ -12,6 +12,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.hateoas.CollectionModel;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.Link;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -101,12 +103,11 @@ public class ProductController {
 	 */
 	@GetMapping
 	@PreAuthorize ("hasRole('ADMIN') or hasRole('USER')")
-	public ResponseEntity<Map<String, Object>> dameProductos(
+	public ResponseEntity<CollectionModel<EntityModel<Product>>> dameProductos(
 			@RequestParam(name = "page", required = false) Integer page,
 			@RequestParam(name = "size", required = false) Integer size) {
 
 		List<Product> products = null;
-		Map<String, Object> responseAsMap = new HashMap<>();
 		Sort sort = Sort.by("name");
 
 		// Comprobar si en la peticion (request) me han suministrado los parametros page
@@ -118,16 +119,39 @@ public class ProductController {
 			// Implica devolver los productos paginados, es decir, una pagina de Product
 			Page<Product> productPage = productService.findAll(pageable);
 			products = productPage.getContent();
-			responseAsMap.put("products", products);
 
 		} else {
 
 			// Devolver los productos ordenados, por nombre (name), por ejemplo
 			products = productService.findAll(sort);
-			responseAsMap.put("products", products);
 		}
 
-		return new ResponseEntity<>(responseAsMap, HttpStatus.OK);
+		/**
+		 * Implementacion BASICA de HATEOAS (codigo repetitivo, sin
+		 * RepresentationModelAssemblerSupport): por cada Product hay que construir a
+		 * mano su EntityModel con sus enlaces (self y all products)
+		 */
+		List<EntityModel<Product>> productsConEnlaces = new ArrayList<>();
+
+		for (Product product : products) {
+
+			Link selfLink = linkTo(methodOn(ProductController.class).findProductById(product.getId()))
+					.withSelfRel();
+			Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(page, size))
+					.withRel("all products");
+
+			EntityModel<Product> productModel = EntityModel.of(product, selfLink, allProductsLink);
+			productsConEnlaces.add(productModel);
+		}
+
+		// Enlace hipermedial que apunta a la propia coleccion (self de la coleccion)
+		Link collectionSelfLink = linkTo(methodOn(ProductController.class).dameProductos(page, size))
+				.withSelfRel();
+
+		CollectionModel<EntityModel<Product>> collectionModel = CollectionModel.of(productsConEnlaces,
+				collectionSelfLink);
+
+		return new ResponseEntity<>(collectionModel, HttpStatus.OK);
 	}
 
 	/**
@@ -150,19 +174,21 @@ public class ProductController {
 		try {
 			Product product = productService.findById(product_id);
 
-			// vamos a agregar enlaces hipermediales (HATEOAS) al producto 
-			Link selfLink = linkTo(methodOn(ProductController.class).findProductById(product_id)).withSelfRel();
-			// Creamos un enlace hipermedial (HATEOAS) que apunta a todos los productos
-			Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(3, 3)).withRel("all products");
-
-
 			if (product != null) {
+
+				// vamos a agregar enlaces hipermediales (HATEOAS) al producto, envolviendolo
+				// en un EntityModel (implementacion basica, repetitiva, sin Assembler)
+				Link selfLink = linkTo(methodOn(ProductController.class).findProductById(product_id))
+						.withSelfRel();
+				// Creamos un enlace hipermedial (HATEOAS) que apunta a todos los productos
+				Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(null, null))
+						.withRel("all products");
+
+				EntityModel<Product> productModel = EntityModel.of(product, selfLink, allProductsLink);
+
 				String successMessage = "El producto con id " + product_id + " ha sido encontrado";
 				responseAsMap.put("mensaje todo OK: ", successMessage);
-				responseAsMap.put("producto encontrado: ", product);
-				// Agregar los enlaces hipermediales al mapa de respuesta
-				responseAsMap.put("self link: ", selfLink);
-				responseAsMap.put("all products link: ", allProductsLink);
+				responseAsMap.put("producto encontrado: ", productModel);
 				responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
 			} else {
 				String failureMessage = "No ha sido encontrado ningun producto con id: " + product_id;
@@ -268,9 +294,19 @@ public class ProductController {
 
 		try {
 			Product productoPersistido = productService.save(product);
+
+			// Implementacion basica de HATEOAS: envolvemos el producto persistido en un
+			// EntityModel con sus enlaces (self y all products)
+			Link selfLink = linkTo(methodOn(ProductController.class).findProductById(productoPersistido.getId()))
+					.withSelfRel();
+			Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(null, null))
+					.withRel("all products");
+
+			EntityModel<Product> productModel = EntityModel.of(productoPersistido, selfLink, allProductsLink);
+
 			responseAsMap.put("mensaje: ", "Producto persistido exitosamente!!!");
-			responseAsMap.put("product", productoPersistido);
-			responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.CREATED);
+			responseAsMap.put("product", productModel);
+			responseEntity = ResponseEntity.created(selfLink.toUri()).body(responseAsMap);
 		} catch (DataAccessException e) {
 			responseAsMap.put("Error Grave", "No ha podido ser guardado el producto y la causa mas probable es: "
 					+ e.getMostSpecificCause().getMessage());
@@ -458,8 +494,18 @@ public class ProductController {
 		try {
 			product.setId(product_id);
 			Product productoAGuardar = productService.save(product);
+
+			// Implementacion basica de HATEOAS: envolvemos el producto actualizado en un
+			// EntityModel con sus enlaces (self y all products)
+			Link selfLink = linkTo(methodOn(ProductController.class).findProductById(productoAGuardar.getId()))
+					.withSelfRel();
+			Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(null, null))
+					.withRel("all products");
+
+			EntityModel<Product> productModel = EntityModel.of(productoAGuardar, selfLink, allProductsLink);
+
 			responseAsMap.put("mensaje: ", "Producto actualizado exitósamente!");
-			responseAsMap.put("producto actualizado: ", productoAGuardar);
+			responseAsMap.put("producto actualizado: ", productModel);
 			responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
 
 		} catch (DataAccessException e) {
@@ -504,7 +550,15 @@ public class ProductController {
 
             productService.delete(productService.findById(id));
             String successMessage = "El producto con id " + id + ", ha sido eliminado";
+
+            // Implementacion basica de HATEOAS: como el producto ya no existe, no se
+            // puede envolver en un EntityModel propio, pero si se puede indicar al
+            // cliente a donde dirigirse a continuacion (coleccion de productos)
+            Link allProductsLink = linkTo(methodOn(ProductController.class).dameProductos(null, null))
+                    .withRel("all products");
+
             responseAsMap.put("mensaje", successMessage);
+            responseAsMap.put("enlace a todos los productos", allProductsLink);
             responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
         } catch (DataAccessException e) {
             String errorMessage = "No ha podido ser eliminado el producto cuyo id es: " + id
