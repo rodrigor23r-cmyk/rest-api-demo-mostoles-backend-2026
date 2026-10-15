@@ -530,6 +530,7 @@ public class ProductController {
 			@RequestParam(name = "presentation") String presentation) {
 
 		Map<String, Object> responseAsMap = new HashMap<>();
+		
 		List<Product> products = productService.findByPresentationName(presentation);
 
 		if (products.isEmpty()) {

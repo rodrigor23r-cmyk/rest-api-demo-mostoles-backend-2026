@@ -329,7 +329,8 @@ class ProductControllerTest {
 	}
 
 	// La sentencia para probar este test en la terminal es:
-	// ./mvnw test -Dtest=ProductControllerTest#testGetProductsByPresentationUnauthenticated
+	// ./mvnw test
+	// -Dtest=ProductControllerTest#testGetProductsByPresentationUnauthenticated
 	@Test
 	@DisplayName("GET /products/products-by-presentation sin autenticar devuelve 401 Unauthorized")
 	void testGetProductsByPresentationUnauthenticated() throws Exception {
@@ -343,36 +344,30 @@ class ProductControllerTest {
 	}
 
 	// La sentencia para probar este test en la terminal es:
-	// ./mvnw test -Dtest=ProductControllerTest#testGetProductsByPresentationAuthenticated
+	// ./mvnw test
+	// -Dtest=ProductControllerTest#testGetProductsByPresentationAuthenticated
 	@Test
-@DisplayName("GET /products/products-by-presentation con usuario autenticado devuelve 200 y los productos")
-void testGetProductsByPresentationAuthenticated() throws Exception {
+	@DisplayName("GET /products/products-by-presentation con usuario autenticado devuelve 200 y los productos")
+	void testGetProductsByPresentationAuthenticated() throws Exception {
 
-    // given
-    Presentation presentation = new Presentation();
-    presentation.setName("unidad");
+		// given
+		List<Product> productsByPresentation = List.of(product1);
 
-    Product product = new Product();
-    product.setName("Producto test");
-    product.setPresentation(presentation);
+		given(productService.findByPresentationName(presentation1.getName()))
+				.willReturn(productsByPresentation);
 
-    List<Product> productsByPresentation = new ArrayList<>();
-    productsByPresentation.add(product);
+		// when
+		ResultActions response = mockMvc.perform(get("/products/products-by-presentation")
+				.param("presentation", presentation1.getName())
+				.accept(MediaType.APPLICATION_JSON)
+				.header("Authorization", this.token));
 
-    given(productService.findByPresentationName("unidad")).willReturn(productsByPresentation);
-
-    // when
-    ResultActions response = mockMvc.perform(get("/products/products-by-presentation")
-            .param("presentation", "unidad")
-            .accept(MediaType.APPLICATION_JSON)
-            .header("Authorization", this.token));
-
-    // then
-    response.andDo(print())
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.products.length()", is(1)))
-            .andExpect(jsonPath("$.products[0].name", is("Producto test")))
-            .andExpect(jsonPath("$.products[0].presentation.name", is("unidad")));
-}
+		// then
+		response.andDo(print())
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.products.length()", is(1)))
+				.andExpect(jsonPath("$.products[0].name", is(product1.getName())))
+				.andExpect(jsonPath("$.products[0].presentation.name", is(presentation1.getName())));
+	}
 
 }
