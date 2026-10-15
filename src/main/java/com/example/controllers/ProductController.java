@@ -524,13 +524,14 @@ public class ProductController {
 		return responseEntity;
 	}
 
+	// https://github.com/rodrigor23r-cmyk/rest-api-demo-mostoles-backend-2026.git
 	@GetMapping("/products-by-presentation")
 	@PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
 	public ResponseEntity<Map<String, Object>> getProductsByPresentation(
 			@RequestParam(name = "presentation") String presentation) {
 
 		Map<String, Object> responseAsMap = new HashMap<>();
-		
+
 		List<Product> products = productService.findByPresentationName(presentation);
 
 		if (products.isEmpty()) {
